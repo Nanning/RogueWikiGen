@@ -122,17 +122,29 @@ foreach ($Mech in $InputObject) {
             }
         }
         #>
+        $MaxRa = "Hands";
+        $MaxLa = "Hands";
+        if ([bool]($Mech.ArmActuatorSupport)) {
+          $MaxRa = $Mech.ArmActuatorSupport.RA;
+          $MaxLa = $Mech.ArmActuatorSupport.LA;
+        }
         #SpecialistFile
         foreach ($DefItemTop in $METagDict.Defaults.Specialist) { #process each item into fixed loadout
             #Check if CategoryID is in use
             foreach ($DefItem in $DefItemTop.Defaults) {
+                $ItemLoc = $($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key;
                 if ((-not !$Mech.Loadout.Fixed.psobject.Properties.Value) -and (-not !$DefItemTop.CategoryID)) {
-                    $CatIDCheck = Compare-Object -IncludeEqual -ExcludeDifferent @($($CustomGear.$($DefItemTop.CategoryID))) @($Mech.Loadout.Fixed.psobject.Properties.Value) -ErrorAction SilentlyContinue
-                    if ($CatIDCheck.InputObject.Count -eq 0) { #if no items insitu fill categoryid req
-                        $Mech.Loadout.Fixed.$($($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key) += $DefItem.DefID
+                    if (($ItemLoc -eq "RA") -and ($MaxRa -ne "Hands") -and ($DefItem.CategoryID -eq "HandHeld")) {
+                        $ItemLoc = "";
+                    } else {
+                        $CatIDCheck = Compare-Object -IncludeEqual -ExcludeDifferent @($($CustomGear.$($DefItemTop.CategoryID))) @($Mech.Loadout.Fixed.$($ItemLoc)) -ErrorAction SilentlyContinue
+                        if ($CatIDCheck.InputObject.Count -gt 0) { # items already exist
+                            $ItemLoc = "";
+                        }
                     }
-                } else {
-                    $Mech.Loadout.Fixed.$($($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key) += $DefItem.DefID
+                }
+                if (-not !$ItemLoc) {
+                    $Mech.Loadout.Fixed.$($ItemLoc) += $DefItem.DefID
                 }
             }
         }
@@ -140,17 +152,43 @@ foreach ($Mech in $InputObject) {
         foreach ($DefItemTop in $METagDict.Defaults.MechEngineer) { #process each item into insitu loadout
             #Check if CategoryID is in use
             foreach ($DefItem in $DefItemTop.Defaults) {
+                $ItemLoc = $($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key;
                 if ((-not !$Mech.Loadout.InSitu.psobject.Properties.Value) -and (-not !$DefItemTop.CategoryID)) {
-                    if (($DefItem.Location -match 'Right') -or ($DefItem.Location -match 'Left')) {
-                        $CatIDCheck = Compare-Object -IncludeEqual -ExcludeDifferent @($($CustomGear.$($DefItemTop.CategoryID))) @($Mech.Loadout.InSitu.$($($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key)) -ErrorAction SilentlyContinue
+                    if ($DefItem.Location -match 'Right') {
+                        if (($DefItem.Location -match 'Arm') -and ($DefItem.DefID -match 'Lower') -and ($MaxRa -eq "Upper")) {
+                            $ItemLoc = "";
+                            $MaxRa = "Lower"; # Valid because Upper is before Lower in MechEngineer
+                        } elseif (($DefItem.Location -match 'Arm') -and ($DefItem.DefID -match 'Hand') -and ($MaxRa -eq "Lower")) {
+                            $ItemLoc = "";
+                            $MaxRa = "Hands";
+                        } else {
+                            $CatIDCheck = Compare-Object -IncludeEqual -ExcludeDifferent @($($CustomGear.$($DefItemTop.CategoryID))) @($Mech.Loadout.InSitu.$($ItemLoc)) -ErrorAction SilentlyContinue
+                            if ($CatIDCheck.InputObject.Count -gt 0) { #already there
+                                $itemLoc = "";
+                            }
+                        }
+                    } elseif ($DefItem.Location -match 'Left') {
+                        if (($DefItem.Location -match 'Arm') -and ($DefItem.DefID -match 'Lower') -and ($MaxLa -eq "Upper")) {
+                            $ItemLoc = "";
+                            $MaxLa = "Lower";
+                        } elseif (($DefItem.Location -match 'Arm') -and ($DefItem.DefID -match 'Hand') -and ($MaxLa -eq "Lower")) {
+                            $ItemLoc = "";
+                            $MaxLa = "Hands";
+                        } else {
+                            $CatIDCheck = Compare-Object -IncludeEqual -ExcludeDifferent @($($CustomGear.$($DefItemTop.CategoryID))) @($Mech.Loadout.InSitu.$($ItemLoc)) -ErrorAction SilentlyContinue
+                            if ($CatIDCheck.InputObject.Count -gt 0) { #already there
+                                $itemLoc = "";
+                            }
+                        }
                     } else {
                         $CatIDCheck = Compare-Object -IncludeEqual -ExcludeDifferent @($($CustomGear.$($DefItemTop.CategoryID))) @($Mech.Loadout.InSitu.psobject.Properties.Value) -ErrorAction SilentlyContinue
+                        if ($CatIDCheck.InputObject.Count -gt 0) { #already there
+                            $itemLoc = "";
+                        }
                     }
-                    if ($CatIDCheck.InputObject.Count -eq 0) { #if no items insitu fill categoryid req
-                        $Mech.Loadout.InSitu.$($($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key) += $DefItem.DefID
-                    }
-                } else {
-                    $Mech.Loadout.InSitu.$($($HPLongSortHash.GetEnumerator() | ? {$_.Value -eq $DefItem.Location}).Key) += $DefItem.DefID
+                }
+                if (-not !$ItemLoc) {
+                    $Mech.Loadout.InSitu.$($ItemLoc) += $DefItem.DefID
                 }
             }
         }    
@@ -295,11 +333,11 @@ foreach ($Mech in $InputObject) {
             $LoadoutText += "|-`r`n! Fixed`r`n"
             foreach ($TableLoc in $TableRow) {
                 $LoadoutText += "|`r`n"
-                if ([bool]($Mech.ArmActuatorSupport)) {
+                <#if ([bool]($Mech.ArmActuatorSupport)) {
                     if (($TableLoc -eq 'LA') -or ($TableLoc -eq 'RA')) {
                         $LoadoutText += "Arm Limit: $($Mech.ArmActuatorSupport.$TableLoc)`r`n"
                     }
-                }
+                }#>
                 #InSitu Stuff
                 if ($TableLoc -ne '') {
                     $TableLocItemArray = $Mech.Loadout.InSitu.$($TableLoc) | group | sort Name
