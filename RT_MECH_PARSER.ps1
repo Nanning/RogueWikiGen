@@ -539,7 +539,7 @@ foreach ($MDefFileObject in $MDefFileObjectList) {
             "ArmLimitLowerLeft" {"Lower"}
         }
         $AASRightLimit = "Hands"
-        $AASLeftLimit = switch ($CDefObject.ChassisTags.items) {
+        $AASRightLimit = switch ($CDefObject.ChassisTags.items) {
             "ArmLimitUpperRight" {"Upper"}
             "ArmLimitLowerRight" {"Lower"}
         }
